@@ -4,10 +4,12 @@ from datetime import datetime
 from pymongo import MongoClient
 from src.config import config
 
-#tableau avec les mots-clés
-mots = ['up', 'Stat']
+# tableau avec les mots-clés
+mots = ['up', 'stat', 'add', 'del', 'addto', 'shrole', 'shperm', 'help']
+desc = ['exemple', 'exemple', 'exemple', 'exemple', 'exemple', 'exemple', 'exemple', 'exemple']
 
-def main ():
+
+def main():
     class Command:
         def __init__(self):
             self.name = ''
@@ -15,13 +17,12 @@ def main ():
             self.time = datetime
 
         def get_name(self):
-            choix = str(input('Choissisez un mot-clé :')).lower()
-            com = choix.split()
+            choice = str(input('Choissisez un mot-clé :')).lower()
+            com = choice.split()
             self.name = com[0]
             for x in com[1:]:
                 self.param.append(x)
             self.time = datetime.now()
-            return choix
 
     class LocalMachineCommand:
         @staticmethod
@@ -42,7 +43,7 @@ def main ():
                                     stdout=subprocess.PIPE)  # Fonction qui exécuter ipconfig et crée un pipe
             while True:  # on parcourt le pipe
                 line = proc.stdout.readline()
-                if ip.encode() in line:  ##On retrouve la ligne avec l'adresse ipv4 local récupérée avant
+                if ip.encode() in line:  # On retrouve la ligne avec l'adresse ipv4 local récupérée avant
                     break
             netmask = proc.stdout.readline().rstrip().split(b':')[-1].replace(b' ',
                                                                               b'').decode()  # On retire les caractères et extrait le masque de sous-réseau
@@ -59,7 +60,7 @@ def main ():
                 ip6.connect(("2001:4860:4860::8888",
                              80))  # Connexion à l'adresse 2001:4860:4860::8888 de google et on regarde le port 80
                 return ip6.getsockname()[0]
-            except:
+            except Exception:
                 return 'Pas d\'adresse ipv6'
 
         def get_ipv4_public(self):  # Fonction qui renvoie l'adresse ipv4 public
@@ -68,37 +69,108 @@ def main ():
 
         def get_ping(self):
             return print('En cours de construction...')
-    class MongoConnector:
+
+    class DataBaseCommand:
         """
             Cette classe permet de créer une connexion vers la base de données.
-            Veuillez modifier la variable 'certificat_path' avec le chemin vers l'endroit ou se trouve votre certificat.
-            Exemple d'utilisation dans votre code :
-            try:
-                with MongoConnector() as connector:
-                    collection = connector.db["users"]
-                    res = collection.find_one()
-                    print(res)
-            except Exception as e:
-                print(e)
         """
+
         def __init__(self):
             certificat_path = config.ROOT_DIR + "\\2TM1-G2.pem"
             uri = "mongodb+srv://cluster0.5i6qo.gcp.mongodb.net/ephecom?authSource=%24external&authMechanism=MONGODB-X509"
             client = MongoClient(uri,
-                                tls=True,
-                                tlsCertificateKeyFile=certificat_path)
+                                 tls=True,
+                                 tlsCertificateKeyFile=certificat_path)
             self.db = client['ephecom']
+
         def __enter__(self):
             return self
 
         def __exit__(self):
             self.db.close()
+
+    class RoleManagementCommand:
+        """Role management"""
+
+        def __init__(self, role=None, user=None):
+            self.__role = role
+            self.__user = user
+
+        def add(self):
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    list_users = collection.find()
+                    for users in list_users:
+                        if self.__user == users['user_name'] and self.__role or int(self.__role) not in users['list_role']:
+                            new_value = {"$push": {"list_role": int(self.__role)}}
+                            connector.db["users"].update_one({'user_name': self.__user}, new_value)
+            except Exception as e:
+                print(e)
+
+        def dell(self):
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    list_users = collection.find()
+                    for users in list_users:
+                        if self.__user == users['user_name'] and int(self.__role) or self.__role in users['list_role']:
+                            print("here")
+                            users['list_role'].remove(self.__role)
+                            print(users['list_role'])
+                            del_value = {"$set": {"list_role": users['list_role']}}
+                            connector.db["users"].update_one({'user_name': self.__user}, del_value)
+            except Exception as e:
+                print(e)
+
+        def add_to(self):
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    list_users = collection.find()
+                    for users in list_users:
+                        print("user:", users)
+            except Exception as e:
+                print(e)
+
+        def show_role(self):
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["roles"]
+                    list_role = collection.find()
+                    for role in list_role:
+                        print("Roles:", role['name'])
+            except Exception as e:
+                print(e)
+
+        def show_perm(self):
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["roles"]
+                    collection2 = connector.db["permissions"]
+                    list_role = collection.find()
+                    list_perm = collection2.find()
+                    for role in list_role:
+                        if role['name'] == self.__role:
+                            print("Permission:", role['perm_list'])
+                    for perm in list_perm:
+                       print("Permission:", perm['name'])
+            except Exception as e:
+                print(e)
+
+        def help(self):
+            print('Liste des Commandes:')
+            i = 0
+            for cmd in mots:
+                print(' ', cmd, '-', desc[i])
+                i += 1
+
     class Result:
 
         def get_space(self):  # Fonction qui fait une ligne d'espace en console
             return print('')
 
-        def display_result(self): #Fonction d'affichage
+        def display_result(self):  # Fonction d'affichage
             space = Result()
             local = LocalMachineCommand()
             network = NetworkStatCommand()
@@ -110,26 +182,30 @@ def main ():
 
             flag = False  # On définit un flag pour aider à boucler
 
-            while flag == False:
+            while not flag:
                 com = Command()
                 space.get_space()
-                choix = com.get_name()
+                com.get_name()
+                choice = com.name
                 space.get_space()
-                if choix == 'up':
+                if choice == 'up':
                     print('LOCAL ADDRESS :')
-                    print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_local()), '/',  local.get_data(network.get_masque('local'))) # Affichage de l'adresse IPV4 local
-                    print('IPV6 ADDRESS :',  local.get_data(network.get_ipv6_local()))  # Affichage de l'adresse IPV6 local
+                    print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_local()), '/',
+                          local.get_data(network.get_masque('local')))  # Affichage de l'adresse IPV4 local
+                    print('IPV6 ADDRESS :',
+                          local.get_data(network.get_ipv6_local()))  # Affichage de l'adresse IPV6 local
                     space.get_space()
                     print('PUBLIC ADDRESS :')
-                    print('IPV4 ADDRESS :',  local.get_data(network.get_ipv4_public()), '/',  local.get_data(network.get_masque('public')))# Affichage de l'adresse IPV4 public
+                    print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_public()), '/',
+                          local.get_data(network.get_masque('public')))  # Affichage de l'adresse IPV4 public
                     space.get_space()
                     print('PING :')
                     local.get_data(network.get_ping())
                     space.get_space()
-                elif choix == 'stat':
+                elif choice == 'stat':
                     count = 0
                     try:
-                        with MongoConnector() as connector:
+                        with DataBaseCommand() as connector:
                             collection = connector.db["users"]
                             col = collection.find()
                             for i in col:
@@ -138,15 +214,27 @@ def main ():
                         space.get_space()
                     except Exception as e:
                         print(e)
-                elif choix == 'fin':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'fin'
+                elif choice == 'add':
+                    RoleManagementCommand(com.param[0], com.param[1]).add()
+                elif choice == 'del':
+                    RoleManagementCommand(com.param[0], com.param[1]).dell()
+                elif choice == 'addto':
+                    RoleManagementCommand().add_to()
+                elif choice == 'shrole':
+                    RoleManagementCommand().show_role()
+                elif choice == 'shperm':
+                    RoleManagementCommand(com.param[0]).show_perm()
+                elif choice == 'help':
+                    RoleManagementCommand().help()
+                elif choice == 'fin':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'fin'
                     print('Merci d\'avoir utilisé le Chabot')
                     flag = True
                 else:
-                    print('Choissisez une des commandes suivantes : up, stat')
-
+                    print('Choissisez une des commandes suivantes : up, stat, add, shRole, shPerm')
 
     res = Result()
     res.display_result()
+
 
 if __name__ == "__main__":
     main()
