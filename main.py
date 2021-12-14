@@ -1,6 +1,8 @@
 import socket
 import subprocess
 from datetime import datetime
+from pymongo import MongoClient
+from src.config import config
 
 #tableau avec les mots-clés
 mots = ['up', 'Stat']
@@ -66,7 +68,31 @@ def main ():
 
         def get_ping(self):
             return print('En cours de construction...')
+    class MongoConnector:
+        """
+            Cette classe permet de créer une connexion vers la base de données.
+            Veuillez modifier la variable 'certificat_path' avec le chemin vers l'endroit ou se trouve votre certificat.
+            Exemple d'utilisation dans votre code :
+            try:
+                with MongoConnector() as connector:
+                    collection = connector.db["users"]
+                    res = collection.find_one()
+                    print(res)
+            except Exception as e:
+                print(e)
+        """
+        def __init__(self):
+            certificat_path = config.ROOT_DIR + "\\2TM1-G2.pem"
+            uri = "mongodb+srv://cluster0.5i6qo.gcp.mongodb.net/ephecom?authSource=%24external&authMechanism=MONGODB-X509"
+            client = MongoClient(uri,
+                                tls=True,
+                                tlsCertificateKeyFile=certificat_path)
+            self.db = client['ephecom']
+        def __enter__(self):
+            return self
 
+        def __exit__(self):
+            self.db.close()
     class Result:
 
         def get_space(self):  # Fonction qui fait une ligne d'espace en console
@@ -100,6 +126,24 @@ def main ():
                     print('PING :')
                     local.get_data(network.get_ping())
                     space.get_space()
+                elif choix == 'stat':
+                    count = 0
+                    try:
+                        with MongoConnector() as connector:
+                            collection = connector.db["users"]
+                            col = collection.find()
+                            for i in col:
+                                count += 1
+                            print('Il y a ' + str(count) + ' utilisateur(s).')
+                        space.get_space()
+                    except Exception as e:
+                        print(e)
+                elif choix == 'fin':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'fin'
+                    print('Merci d\'avoir utilisé le Chabot')
+                    flag = True
+                else:
+                    print('Choissisez une des commandes suivantes : up, stat')
+
 
     res = Result()
     res.display_result()
