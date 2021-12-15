@@ -1,17 +1,24 @@
 import socket
 import subprocess
+import matplotlib.pyplot as plt
 from datetime import datetime
 from pymongo import MongoClient
 from src.config import config
 
 # tableau avec les mots-clés
-mots = ['up', 'stat', 'add', 'del', 'addTo', 'shRole', 'shPerm', "ShUtiRole", 'help']
-desc = ['affiche le statut du réseau', 'affiche le nombre d’utilisateurs total',
+mots = ['Commande Réseaux:','up', 'Commande Statistique:', 'stat', "histoCom", "statCo", 'statSpam', "graphMess",
+        'Commande Role:','add', 'del', 'addTo', 'shRole', 'shPerm',
+        "ShUtiRole", 'help']
+desc = ['','affiche le statut du réseau', '', 'affiche le nombre d’utilisateurs total',
+        'affiche l’historique de commande de l’utilisateur',
+        "Nombre d'utilisateur connecter total ou par role (-role pour tout les role sauf ce role)",
+        "affiche utilisateur qui spam le plus", 'Graph des message envoyer', '',
         'ajouter un rôle à un utilisateur (Ex:add role utilisateur)', ' retirer un rôle à un utilisateur '
                                                                       '(Ex:del role utilisateur)',
         'ajouter un rôle à tous les noms utilisateurs (Ex:addTo role utilisateur1 utilisateur2)',
         'affiche une liste des différents rôles', 'affiche les permissions d\'un role (Ex:shPerm role)',
         'affiche une liste des utilisateurs par rôle (Ex: ShUtiRole role)', 'affiche toutes les commandes']
+histo_cmd = []
 
 
 def main():
@@ -27,7 +34,40 @@ def main():
             self.name = com[0]
             for x in com[1:]:
                 self.param.append(x)
-            self.time = datetime.now()
+            self.time = datetime.now().strftime("%d-%m-%Y  %H:%M")
+
+    class HistoCommand:
+        def __init__(self, name=None, param=None, time=None):
+            self.__name = name
+            self.__param = param
+            self.__time = time
+
+        @property
+        def name(self):
+            return self.__name
+
+        @name.setter
+        def name(self, value):
+            self.__name = value
+
+        @property
+        def param(self):
+            return self.__param
+
+        @param.setter
+        def param(self, value):
+            self.__param = value
+
+        @property
+        def time(self):
+            return self.__time
+
+        @time.setter
+        def time(self, value):
+            self.__time = value
+
+        def get_histo(self):
+            histo_cmd.append({"cmd": self.__name, "param": " ".join(self.__param), "time": self.__time})
 
     class LocalMachineCommand:
         @staticmethod
@@ -95,6 +135,81 @@ def main():
 
         def __exit__(self):
             self.db.close()
+
+    class UserStatCommand:
+        def __init__(self, role=None):
+            self.__role = role
+
+        @property
+        def role(self):
+            return self.__role
+
+        @role.setter
+        def role(self, value):
+            self.__role = value
+
+        def stat(self):
+            count = 0
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    col = collection.find()
+                    for i in col:
+                        count += 1
+                    print('Il y a ', str(count), ' utilisateur(s).')
+            except Exception as e:
+                print(e)
+
+        def histo_com(self):
+            for cmd in histo_cmd:
+                print("Commande:", cmd["cmd"], cmd["param"], cmd["time"])
+
+        def graph_mess(self):
+            # fonctionne mais donnée manquante
+            x = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'samedi', 'dimanche']
+            y = [1, 3, 10, 15, 6, 9, 1] # replace with nb message when ready
+            plt.plot(x, y, color='purple')
+            plt.xlabel("jours de la semaine")
+            plt.ylabel("Nombre de message")
+            plt.title("Nombre de message envoyer par jour pour 1 semaine")
+            plt.show()
+
+        def stat_spam(self):
+            # get message vide ... En construction...
+            spammer_dict = {}
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    collection2 = connector.db["messages"]
+                    list_users = collection.find()
+                    list_message = collection2.find()
+                    for users in list_users:
+                        spammer_dict[users['user_name']] = 1
+                    for message in list_message:
+                        var_time = message['temp']
+                        if var_time.strftime("%H") - datetime.now().strftime("%H") < 2:
+                            spammer_dict[message['name']] += 1
+                        sorted(spammer_dict, key=lambda t: t[1])
+                        print(spammer_dict[0], spammer_dict[1], spammer_dict[2])
+            except Exception as e:
+                print(e)
+
+        def stat_co(self):
+            # in build...
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["users"]
+                    list_users = collection.find()
+                    for users in list_users:
+                        if self.__role[:1] == "-":
+                            if self.__role not in users["list_role"]:
+                                print(users['user_name'])
+                        elif self.__role in users["list_role"]:
+                            print(users['user_name'])
+                        elif self.__role is None:
+                            print(users['user_name'])
+            except Exception as e:
+                print(e)
 
     class RoleManagementCommand:
         """Role management"""
@@ -202,7 +317,12 @@ def main():
         print('Liste des Commandes:')
         i = 0
         for cmd in mots:
-            print(' ', cmd, '-', desc[i])
+            if desc[i] == '':
+                print()
+                print(' ', cmd)
+                print()
+            else:
+                print(' ', cmd, '-', desc[i])
             i += 1
 
     class Result:
@@ -215,6 +335,8 @@ def main():
             local = LocalMachineCommand()
             network = NetworkStatCommand()
             role_cmd = RoleManagementCommand()
+            stat = UserStatCommand()
+            histo_cmd = HistoCommand()
             # Affichage des messages de bienvenu
             print('Bienvenu dans le Chatbot')
             space.get_space()
@@ -244,44 +366,88 @@ def main():
                         print('PING :')
                         local.get_data(network.get_ping())
                         space.get_space()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                     elif choice == 'stat':
-                        count = 0
-                        try:
-                            with DataBaseCommand() as connector:
-                                collection = connector.db["users"]
-                                col = collection.find()
-                                for i in col:
-                                    count += 1
-                                print('Il y a ' + str(count) + ' utilisateur(s).')
-                            space.get_space()
-                        except Exception as e:
-                            print(e)
+                        stat.stat()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
+                    elif choice == 'histocom':
+                        stat.histo_com()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
+                    elif choice == 'graphmess':
+                        stat.graph_mess()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
+                    elif choice == 'statspam':
+                        stat.stat_spam()
+                    elif choice == 'statco':
+                        stat.role = com.param[0]
+                        stat.stat_co()
                     elif choice == 'add':
-                        role_cmd.role = com.param[0]
-                        role_cmd.user = com.param[1]
+                        role_cmd.role = com.param[0]  # Nom du role
+                        role_cmd.user = com.param[1]  # utilisateur
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                         role_cmd.add()
                     elif choice == 'del':
                         role_cmd.role = com.param[0]
                         role_cmd.user = com.param[1]
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                         role_cmd.dell()
                     elif choice == 'addto':
                         role_cmd.role = com.param[0]
-                        role_cmd.user = com.param[1:]
+                        role_cmd.user = com.param[1:]  # tous les utilisateur entrée
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                         role_cmd.add_to()
                     elif choice == 'shrole':
                         role_cmd.show_role()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                     elif choice == 'shperm':
                         role_cmd.role = com.param[0]
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                         role_cmd.show_perm()
                     elif choice == 'shutirole':
                         role_cmd.role = com.param[0]
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                         role_cmd.show_user_role()
                     elif choice == 'help':
                         help()
+                        histo_cmd.name = com.name
+                        histo_cmd.param = com.param
+                        histo_cmd.time = com.time
+                        histo_cmd.get_histo()
                     elif choice == 'check':
                         try:
                             with DataBaseCommand() as connector:
-                                collection = connector.db["users"]
+                                print(connector.db.list_collection_names())
+                                collection = connector.db["messages"]
                                 list_users = collection.find()
                                 for users in list_users:
                                     print("user:", users)
@@ -291,8 +457,8 @@ def main():
                         print('Merci d\'avoir utilisé le Chabot')
                         flag = True
                     else:
-                        print('Choissisez une des commandes suivantes : up, stat, add, addTo, del, shRole, shPerm, '
-                              'ShUtiRole, Help')
+                        print('Choissisez une des commandes suivantes : up, stat, histoCom, statCo, statSpam,graphMess,'
+                              'add, addTo, del,shRole,shPerm,ShUtiRole, Help')
                 except IndexError:
                     print('Veuillez entrée les arguments nécessaire')
 
