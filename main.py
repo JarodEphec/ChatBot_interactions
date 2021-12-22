@@ -3,21 +3,24 @@ import subprocess
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 from src.config import config
 
 # tableau avec les mots-clés
 mots = ['Commande Réseaux:', 'up', 'Commande Statistique:', 'stat', "histoCom", "statCo", 'statSpam', "graphMess",
+        "statChan",
         'Commande Role:', 'add', 'del', 'addTo', 'shRole', 'shPerm',
-        "ShUtiRole", 'help']
+        "ShUtiRole", 'dbAcces', 'help']
 desc = ['', 'affiche le statut du réseau', '', 'affiche le nombre d’utilisateurs total',
         'affiche l’historique de commande de l’utilisateur',
         "Nombre d'utilisateur connecter total ou par role (-role pour tout les role sauf ce role)",
-        "affiche utilisateur qui spam le plus", 'Graph des message envoyer', '',
+        "affiche utilisateur qui spam le plus", 'Graph des message envoyer', 'Top des channel les plus actif', '',
         'ajouter un rôle à un utilisateur (Ex:add role utilisateur)', ' retirer un rôle à un utilisateur '
                                                                       '(Ex:del role utilisateur)',
         'ajouter un rôle à tous les noms utilisateurs (Ex:addTo role utilisateur1 utilisateur2)',
         'affiche une liste des différents rôles', 'affiche les permissions d\'un role (Ex:shPerm role)',
-        'affiche une liste des utilisateurs par rôle (Ex: ShUtiRole role)', 'affiche toutes les commandes']
+        'affiche une liste des utilisateurs par rôle (Ex: ShUtiRole role)', 'Indique si la connexion a la db a reussi',
+        'affiche toutes les commandes']
 histo_cmd = []
 
 
@@ -29,6 +32,21 @@ def main():
             self.time = datetime
 
         def get_name(self):
+            """
+            console = True
+            choice = ""
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["messages"]
+                    list_message = collection.find()
+                    for message in list_message:
+                        if message['msg'][1] == "!":
+                            choice = str(message['msg'][1:]).lower()
+                            console = False
+            except Exception as e:
+                print(e)
+            if console:
+            """
             choice = str(input('Choissisez un mot-clé :')).lower()
             com = choice.split()
             self.name = com[0]
@@ -129,13 +147,18 @@ def main():
             client = MongoClient(uri,
                                  tls=True,
                                  tlsCertificateKeyFile=certificat_path)
+            self.test_connect = client
             self.db = client['ephecom']
 
         def __enter__(self):
             return self
 
-        def __exit__(self):
-            self.db.close()
+        def __exit__(self, *_):
+            try:
+                self.db.close()
+            except Exception as err:
+                # print(err)
+                pass
 
     class UserStatCommand:
         def __init__(self, role=None):
@@ -221,6 +244,24 @@ def main():
                             print(users['pseudo'])
                         else:
                             print(users['pseudo'])
+            except Exception as e:
+                print(e)
+
+        def stat_chan(self):
+            top_channel = {}
+            try:
+                with DataBaseCommand() as connector:
+                    collection = connector.db["messages"]
+                    list_message = collection.find()
+                    for msg in list_message:
+                        if msg['channel_id'][1] in top_channel:
+                            top_channel[msg['channel_id'][1]] += 1
+                        else:
+                            top_channel[msg['channel_id'][1]] = 1
+                    channel_top = list(top_channel.items())
+                    sorted(channel_top, key=lambda t: t[1])
+                    for i in range(3):
+                        print('Top', i+1, 'pour le channel', channel_top[i][0], 'nombre de message:', channel_top[i][1])
             except Exception as e:
                 print(e)
 
@@ -325,6 +366,14 @@ def main():
             except Exception as e:
                 print(e)
 
+    def db_acces():
+        try:
+            with DataBaseCommand() as connector:
+                connector.test_connect.admin.command('ismaster')
+                print('Data base running')
+        except ConnectionFailure:
+            print("Data base not available")
+
     def help_str():
         print('Liste des Commandes:')
         i = 0
@@ -401,6 +450,10 @@ def main():
                         cmd_histo.time = com.time
                         cmd_histo.get_histo()
                     elif choice == 'statspam':
+                        cmd_histo.name = com.name
+                        cmd_histo.param = com.param
+                        cmd_histo.time = com.time
+                        cmd_histo.get_histo()
                         stat.stat_spam()
                     elif choice == 'statco':
                         try:
@@ -408,7 +461,17 @@ def main():
                         except IndexError:
                             com.param.append('999')
                         stat.role = com.param[0]
+                        cmd_histo.name = com.name
+                        cmd_histo.param = com.param
+                        cmd_histo.time = com.time
+                        cmd_histo.get_histo()
                         stat.stat_co()
+                    elif choice == 'statchan':
+                        cmd_histo.name = com.name
+                        cmd_histo.param = com.param
+                        cmd_histo.time = com.time
+                        cmd_histo.get_histo()
+                        stat.stat_chan()
                     elif choice == 'add':
                         role_cmd.role = com.param[0]  # Nom du role
                         role_cmd.user = com.param[1]  # utilisateur
@@ -453,22 +516,35 @@ def main():
                         cmd_histo.time = com.time
                         cmd_histo.get_histo()
                         role_cmd.show_user_role()
+                    elif choice == 'dbacces':
+                        db_acces()
+                        cmd_histo.name = com.name
+                        cmd_histo.param = com.param
+                        cmd_histo.time = com.time
+                        cmd_histo.get_histo()
                     elif choice == 'help':
                         help_str()
                         cmd_histo.name = com.name
                         cmd_histo.param = com.param
                         cmd_histo.time = com.time
                         cmd_histo.get_histo()
+                        """
                     elif choice == 'check':
                         try:
                             with DataBaseCommand() as connector:
                                 print(connector.db.list_collection_names())
-                                collection = connector.db["users"]
+                                collection = connector.db["messages"]
+                                collection2 = connector.db["channel"]
                                 list_users = collection.find()
+                                list_msg = collection2.find()
                                 for users in list_users:
                                     print("user:", users)
+                                print()
+                                for msg in list_msg:
+                                    print('msg:', msg)
                         except Exception as e:
                             print(e)
+                        """
                     elif choice == 'fin':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'fin'
                         print('Merci d\'avoir utilisé le Chabot')
                         flag = True
