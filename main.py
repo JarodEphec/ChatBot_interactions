@@ -7,10 +7,10 @@ from pymongo.errors import ConnectionFailure
 from src.config import config
 
 # tableau avec les mots-clés
-mots = ['Commande Réseaux:', 'up', 'Commande Statistique:', 'stat', "histoCom", "statCo", 'statSpam', "graphMess",
-        "statChan",
-        'Commande Role:', 'add', 'del', 'addTo', 'shRole', 'shPerm',
-        "ShUtiRole", 'dbAcces', 'help']
+mots = ['Commande Réseaux:', 'network', 'Commande Statistique:', 'statUsers', "histoCommand", "statConnected", 'statSpam', "graphMessages",
+        "statChannel",
+        'Commande Role:', 'add', 'del', 'addTo', 'showRole', 'showPerm',
+        "ShowUtiRole", 'dbAcces', 'help']
 desc = ['', 'affiche le statut du réseau', '', 'affiche le nombre d’utilisateurs total',
         'affiche l’historique de commande de l’utilisateur',
         "Nombre d'utilisateur connecter total ou par role (-role pour tout les role sauf ce role)",
@@ -26,43 +26,54 @@ histo_cmd = []
 
 def main():
     class Command:
-        
+        """
+        This class takes care of splitting the command into name and the different parameters.
+        """
         def __init__(self):
+            """
+            This build initializes the parameters.
+
+            PRE : -
+            POST : -
+            RAISES : -
+            """
             self.name = ''
             self.param = ['0', '']
             self.time = datetime
 
-        def get_name(self, test):
+        def get_name(self, sentence):
             """
-            console = True
-            choice = ""
-            try:
-                with DataBaseCommand() as connector:
-                    collection = connector.db["messages"]
-                    list_message = collection.find()
-                    for message in list_message:
-                        if message['msg'][1] == "!":
-                            choice = str(message['msg'][1:]).lower()
-                            console = False
-            except Exception as e:
-                print(e)
-            if console:
+            This function allows you to split the command line written by the user into different parameters.
+
+            PRE : Sentence need to be str
+            POST : Sentence is split in paramters
+            RAISES : -
             """
-            choice = test
+            choice = sentence
             com = choice.split()
             self.name = com[0]
             i = 0
             for x in com[1:]:
                 if i < 2:
                     self.param[i] = x
-                    i+=1
+                    i += 1
                 else:
                     self.param.append(x)
 
             self.time = datetime.now().strftime("%d-%m-%Y  %H:%M")
 
     class HistoCommand:
+        """
+        This class will store the last 50 commands entered by the user.
+        """
         def __init__(self, name=None, param=None, time=None):
+            """
+            This build initializes the parameters.
+
+            PRE : name is str, param is list of str and time is datetime. They are all initialize at None.
+            POST : -
+            RAISES : -
+            """
             self.__name = name
             self.__param = param
             self.__time = time
@@ -92,26 +103,60 @@ def main():
             self.__time = value
 
         def get_histo(self):
+            """
+            This function adds commands entered by the user to the history.
+
+            PRE : -
+            POST : -
+            RAISES : -
+            """
             histo_cmd.append({"cmd": self.__name, "param": " ".join(self.__param), "time": self.__time})
 
     class LocalMachineCommand(Command):
+        """
+        This class helps to better identify local data and data from the database.
+        """
         def __init__(self):
+            """
+            This build initializes the parameters.
+
+            PRE : -
+            POST : -
+            RAISES : -
+            """
             Command.__init__(self)
+
         @staticmethod
         def get_data(self):
             return self
 
     class NetworkStatCommand(LocalMachineCommand):
-        def __init__(self, sentence):
+        """
+            This class handles all network-related commands.
+        """
+        def __init__(self):
+            """
+            This function allows you to split the command line written by the user into different parameters.
+
+            PRE : -
+            POST : -
+            RAISES : -
+            """
             LocalMachineCommand.__init__(self)
-            self.get_name(sentence)
 
         def get_masque(self, param):  # Fonction qui renvoie le masque de sous-réseau de l'adresse ipv4
+            """
+            This function will retrieve the masks linked to the IP addresses via an ipconfig.
+
+            PRE : param is str
+            POST : netmask is str
+            RAISES : -
+            """
             ip = ''
             if param == 'local':
                 ip = self.get_ipv4_local()
             elif param == 'public':
-                ip =self.get_ipv4_public()
+                ip = self.get_ipv4_public()
             else:
                 print('Error, bad param')
             proc = subprocess.Popen('ipconfig',
@@ -125,33 +170,64 @@ def main():
             # On retire les caractères et extrait le masque de sous-réseau
             return netmask
 
-        def get_ipv4_local(self):  # Fonction qui renvoie l'adresse ipv4 local
-            ip4 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Création du socket IPV4
-            ip4.connect(("8.8.8.8", 80))  # Connexion à l'adresse 8.8.8.8 de google et on regarde le port 80
+        @staticmethod
+        def get_ipv4_local():
+            """
+            This function retrieves the local ipv4 address.
+
+            PRE : -
+            POST : ipv4 is str
+            RAISES : -
+            """
+            ip4 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            ip4.connect(("8.8.8.8", 80))
             return ip4.getsockname()[0]
 
-        def get_ipv6_local(self):  # Fonction qui renvoie l'adresse ipv6 local
+        @staticmethod
+        def get_ipv6_local():
+            """
+            This function retrieves the local ipv6 address.
+
+            PRE : -
+            POST : ipv6 is str
+            RAISES : -
+            """
             try:
-                ip6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)  # Création du socket IPV6
+                ip6 = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
                 ip6.connect(("2001:4860:4860::8888",
-                             80))  # Connexion à l'adresse 2001:4860:4860::8888 de google et on regarde le port 80
+                             80))
                 return ip6.getsockname()[0]
             except Exception:
                 return 'Pas d\'adresse ipv6'
 
-        def get_ipv4_public(self):  # Fonction qui renvoie l'adresse ipv4 public
+        @staticmethod
+        def get_ipv4_public():
+            """
+            This function retrieves the public ipv4 address.
+
+            PRE : -
+            POST : ipv4 is str
+            RAISES : -
+            """
             ipv4 = str(socket.gethostbyname(socket.gethostname()))
             return ipv4
 
-        def get_ping(self):
+        @staticmethod
+        def get_ping():
             return print('En cours de construction...')
 
     class DataBaseCommand(Command):
         """
-            Cette classe permet de créer une connexion vers la base de données.
+        This class is used to create a connection to the database.
         """
-
         def __init__(self):
+            """
+            This build initializes the parameters.
+
+            PRE : -
+            POST : -
+            RAISES : -
+            """
             Command.__init__(self)
             certificat_path = config.ROOT_DIR + "\\2TM1-G2.pem"
             uri = "mongodb+srv://cluster0.5i6qo.gcp.mongodb.net/" \
@@ -168,17 +244,34 @@ def main():
         def __exit__(self, *_):
             try:
                 self.db.close()
-            except Exception as err:
-                # print(err)
+            except Exception:
                 pass
 
     class UserStatCommand(DataBaseCommand):
+        """
+        This class is used to obtain statistics about users.
+        """
         def __init__(self, sentence):
+            """
+            This function allows you to split the command line written by the user into different parameters.
+
+            PRE : Sentence need to be str
+            POST : Role allocation and its str
+            RAISES : -
+            """
             DataBaseCommand.__init__(self)
             self.get_name(sentence)
             self.__role = self.param[0]
 
-        def stat(self):
+        @staticmethod
+        def stat():
+            """
+            This function counts the total number of users.
+
+            PRE : -
+            POST : It displays number of users
+            RAISES : -
+            """
             count = 0
             try:
                 with DataBaseCommand() as connector:
@@ -190,11 +283,27 @@ def main():
             except Exception as e:
                 print(e)
 
-        def histo_com(self):
+        @staticmethod
+        def histo_com():
+            """
+            This function displays the commands entered by the user.
+
+            PRE : -
+            POST : It displays the commands with the name, parameters and time
+            RAISES : -
+            """
             for cmd in histo_cmd:
                 print("Commande:", cmd["cmd"], cmd["param"], cmd["time"])
 
-        def graph_mess(self):
+        @staticmethod
+        def graph_mess():
+            """
+            This function displays the number of messages sent during the week.
+
+            PRE : -
+            POST : It displays number of messages
+            RAISES : -
+            """
             week = [0, 0, 0, 0, 0, 0, 0]
             try:
                 with DataBaseCommand() as connector:
@@ -213,7 +322,15 @@ def main():
             plt.title("Nombre de message envoyer par jour pour 1 semaine")
             plt.show()
 
-        def stat_spam(self):
+        @staticmethod
+        def stat_spam():
+            """
+            This function displays the user who spams the most.
+
+            PRE : -
+            POST : It displays its name
+            RAISES : -
+            """
             spammer_dict = {}
             try:
                 with DataBaseCommand() as connector:
@@ -237,6 +354,13 @@ def main():
                 print(e)
 
         def stat_co(self):
+            """
+            This function displays the names of the logged-in users or by their role.
+
+            PRE : -
+            POST : It displays names of the logged-in users or by their role.
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
@@ -252,7 +376,15 @@ def main():
             except Exception as e:
                 print(e)
 
-        def stat_chan(self):
+        @staticmethod
+        def stat_chan():
+            """
+            This function displays the top 3 most used channels.
+
+            PRE : -
+            POST : It displays the top 3 most used channels.
+            RAISES : -
+            """
             top_channel = {}
             try:
                 with DataBaseCommand() as connector:
@@ -271,9 +403,17 @@ def main():
                 print(e)
 
     class RoleManagementCommand(DataBaseCommand):
-        """Role management"""
-
+        """
+        This class takes care of everything related to role management.
+        """
         def __init__(self, sentence):
+            """
+            This function allows you to split the command line written by the user into different parameters.
+
+            PRE : Sentence need to be str
+            POST : Role, user and group assignment
+            RAISES : -
+            """
             DataBaseCommand.__init__(self)
             self.get_name(sentence)
             self.__role = self.param[0]
@@ -287,6 +427,13 @@ def main():
             cmd_histo.get_histo()
 
         def add(self):
+            """
+            This function adds a role to a user in the database.
+
+            PRE : -
+            POST : The dabase is modified
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
@@ -300,6 +447,13 @@ def main():
                 print(e)
 
         def dell(self):
+            """
+            This function delete a role to a user in the database.
+
+            PRE : -
+            POST : The dabase is modified
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
@@ -313,6 +467,13 @@ def main():
                 print(e)
 
         def add_to(self):
+            """
+            This function adds a role to multiple users in the database.
+
+            PRE : -
+            POST : The dabase is modified
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
@@ -325,7 +486,15 @@ def main():
             except Exception as e:
                 print(e)
 
-        def show_role(self):
+        @staticmethod
+        def show_role():
+            """
+            This function displays the different roles that exist.
+
+            PRE : -
+            POST : It displays the roles
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["roles"]
@@ -336,6 +505,13 @@ def main():
                 print(e)
 
         def show_perm(self):
+            """
+            This function displays the different permissions in relation to a role.
+
+            PRE : -
+            POST : It displays the permissions
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["roles"]
@@ -351,6 +527,13 @@ def main():
                 print(e)
 
         def show_user_role(self):
+            """
+            This function displays the different users in relation to a role.
+
+            PRE : -
+            POST : It displays the users
+            RAISES : -
+            """
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
@@ -365,6 +548,13 @@ def main():
                 print(e)
 
     def db_acces():
+        """
+        This function allows to check the access to the database.
+
+        PRE : -
+        POST : It displays if you have the access or not
+        RAISES : -
+        """
         try:
             with DataBaseCommand() as connector:
                 connector.test_connect.admin.command('ismaster')
@@ -385,13 +575,24 @@ def main():
             i += 1
 
     class Result:
-        def get_space(self):  # Fonction qui fait une ligne d'espace en console
+        """
+        This class is used to display the results of commands.
+        """
+
+        @staticmethod
+        def get_space():
             return print('')
 
-        def display_result(self):  # Fonction d'affichage
+        @staticmethod
+        def display_result():
+            """
+            This function is used to display the result of the commands.
+
+            PRE : -
+            POST : It displays the result
+            RAISES : -
+            """
             space = Result()
-            cmd_histo = HistoCommand()
-            # Affichage des messages de bienvenu
             print('Bienvenu dans le Chatbot')
             space.get_space()
             print('Vous pouvez tapez des mots-clés pour avoir accès à vos données réseaux')
@@ -406,12 +607,12 @@ def main():
                 com.get_name(data)
                 choice = com.name
                 local = LocalMachineCommand()
-                network = NetworkStatCommand(data)
+                network = NetworkStatCommand()
                 role_cmd = RoleManagementCommand(data)
                 stat = UserStatCommand(data)
                 space.get_space()
                 try:
-                    if choice == 'up':
+                    if choice == 'network':
                         print('LOCAL ADDRESS :')
                         print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_local()), '/',
                               local.get_data(network.get_masque('local')))  # Affichage de l'adresse IPV4 local
@@ -425,17 +626,17 @@ def main():
                         print('PING :')
                         local.get_data(network.get_ping())
                         space.get_space()
-                    elif choice == 'stat':
+                    elif choice == 'statusers':
                         stat.stat()
-                    elif choice == 'histocom':
+                    elif choice == 'histocommand':
                         stat.histo_com()
-                    elif choice == 'graphmess':
+                    elif choice == 'graphmessages':
                         stat.graph_mess()
                     elif choice == 'statspam':
                         stat.stat_spam()
-                    elif choice == 'statco':
+                    elif choice == 'statconnected':
                         stat.stat_co()
-                    elif choice == 'statchan':
+                    elif choice == 'statchannel':
                         stat.stat_chan()
                     elif choice == 'add':
                         role_cmd.add()
@@ -443,22 +644,23 @@ def main():
                         role_cmd.dell()
                     elif choice == 'addto':
                         role_cmd.add_to()
-                    elif choice == 'shrole':
+                    elif choice == 'showrole':
                         role_cmd.show_role()
-                    elif choice == 'shperm':
+                    elif choice == 'showperm':
                         role_cmd.show_perm()
-                    elif choice == 'shutirole':
+                    elif choice == 'showutirole':
                         role_cmd.show_user_role()
                     elif choice == 'dbacces':
                         db_acces()
                     elif choice == 'help':
                         help_str()
 
+                    #à supprimer
                     elif choice == 'check':
                         try:
                             with DataBaseCommand() as connector:
                                 print(connector.db.list_collection_names())
-                                collection = connector.db["users"]
+                                collection = connector.db["messages"]
                                 collection2 = connector.db["channel"]
                                 list_users = collection.find()
                                 list_msg = collection2.find()
