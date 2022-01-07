@@ -26,12 +26,13 @@ histo_cmd = []
 
 def main():
     class Command:
+        
         def __init__(self):
             self.name = ''
-            self.param = list()
+            self.param = ['0', '']
             self.time = datetime
 
-        def get_name(self):
+        def get_name(self, test):
             """
             console = True
             choice = ""
@@ -47,11 +48,17 @@ def main():
                 print(e)
             if console:
             """
-            choice = str(input('Choissisez un mot-clé :')).lower()
+            choice = test
             com = choice.split()
             self.name = com[0]
+            i = 0
             for x in com[1:]:
-                self.param.append(x)
+                if i < 2:
+                    self.param[i] = x
+                    i+=1
+                else:
+                    self.param.append(x)
+
             self.time = datetime.now().strftime("%d-%m-%Y  %H:%M")
 
     class HistoCommand:
@@ -87,20 +94,24 @@ def main():
         def get_histo(self):
             histo_cmd.append({"cmd": self.__name, "param": " ".join(self.__param), "time": self.__time})
 
-    class LocalMachineCommand:
+    class LocalMachineCommand(Command):
+        def __init__(self):
+            Command.__init__(self)
         @staticmethod
         def get_data(self):
             return self
 
-    class NetworkStatCommand:
-        @staticmethod
-        def get_masque(self):  # Fonction qui renvoie le masque de sous-réseau de l'adresse ipv4
+    class NetworkStatCommand(LocalMachineCommand):
+        def __init__(self, sentence):
+            LocalMachineCommand.__init__(self)
+            self.get_name(sentence)
+
+        def get_masque(self, param):  # Fonction qui renvoie le masque de sous-réseau de l'adresse ipv4
             ip = ''
-            network = NetworkStatCommand()
-            if self == 'local':
-                ip = network.get_ipv4_local()
-            elif self == 'public':
-                ip = network.get_ipv4_public()
+            if param == 'local':
+                ip = self.get_ipv4_local()
+            elif param == 'public':
+                ip =self.get_ipv4_public()
             else:
                 print('Error, bad param')
             proc = subprocess.Popen('ipconfig',
@@ -135,12 +146,13 @@ def main():
         def get_ping(self):
             return print('En cours de construction...')
 
-    class DataBaseCommand:
+    class DataBaseCommand(Command):
         """
             Cette classe permet de créer une connexion vers la base de données.
         """
 
         def __init__(self):
+            Command.__init__(self)
             certificat_path = config.ROOT_DIR + "\\2TM1-G2.pem"
             uri = "mongodb+srv://cluster0.5i6qo.gcp.mongodb.net/" \
                   "ephecom?authSource=%24external&authMechanism=MONGODB-X509"
@@ -160,17 +172,11 @@ def main():
                 # print(err)
                 pass
 
-    class UserStatCommand:
-        def __init__(self, role=None):
-            self.__role = role
-
-        @property
-        def role(self):
-            return self.__role
-
-        @role.setter
-        def role(self, value):
-            self.__role = value
+    class UserStatCommand(DataBaseCommand):
+        def __init__(self, sentence):
+            DataBaseCommand.__init__(self)
+            self.get_name(sentence)
+            self.__role = self.param[0]
 
         def stat(self):
             count = 0
@@ -231,13 +237,12 @@ def main():
                 print(e)
 
         def stat_co(self):
-            # in build...
             try:
                 with DataBaseCommand() as connector:
                     collection = connector.db["users"]
                     list_users = collection.find()
                     for users in list_users:
-                        if self.__role[0] == "-":
+                        if self.__role == "-":
                             if int(self.__role) not in users["list_role"]:
                                 print(users['pseudo'])
                         elif int(self.__role) in users["list_role"]:
@@ -265,28 +270,21 @@ def main():
             except Exception as e:
                 print(e)
 
-    class RoleManagementCommand:
+    class RoleManagementCommand(DataBaseCommand):
         """Role management"""
 
-        def __init__(self, role=None, user=None):
-            self.__role = role
-            self.__user = user
+        def __init__(self, sentence):
+            DataBaseCommand.__init__(self)
+            self.get_name(sentence)
+            self.__role = self.param[0]
+            self.__user = self.param[1]
+            self.__group = self.param[1:]
 
-        @property
-        def role(self):
-            return self.__role
-
-        @role.setter
-        def role(self, value):
-            self.__role = value
-
-        @property
-        def user(self):
-            return self.__user
-
-        @user.setter
-        def user(self, value):
-            self.__user = value
+            cmd_histo = HistoCommand()
+            cmd_histo.name = self.name
+            cmd_histo.param = self.param
+            cmd_histo.time = self.time
+            cmd_histo.get_histo()
 
         def add(self):
             try:
@@ -320,7 +318,7 @@ def main():
                     collection = connector.db["users"]
                     list_users = collection.find()
                     for users in list_users:
-                        if users['pseudo'] in self.__user:
+                        if users['pseudo'] in self.__group:
                             if self.__role or int(self.__role) not in users['list_role']:
                                 new_value = {"$push": {"list_role": int(self.__role)}}
                                 connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
@@ -387,16 +385,11 @@ def main():
             i += 1
 
     class Result:
-
         def get_space(self):  # Fonction qui fait une ligne d'espace en console
             return print('')
 
         def display_result(self):  # Fonction d'affichage
             space = Result()
-            local = LocalMachineCommand()
-            network = NetworkStatCommand()
-            role_cmd = RoleManagementCommand()
-            stat = UserStatCommand()
             cmd_histo = HistoCommand()
             # Affichage des messages de bienvenu
             print('Bienvenu dans le Chatbot')
@@ -407,10 +400,15 @@ def main():
             flag = False  # On définit un flag pour aider à boucler
 
             while not flag:
+                data = str(input('Choissisez un mot-clé :')).lower()
                 com = Command()
                 space.get_space()
-                com.get_name()
+                com.get_name(data)
                 choice = com.name
+                local = LocalMachineCommand()
+                network = NetworkStatCommand(data)
+                role_cmd = RoleManagementCommand(data)
+                stat = UserStatCommand(data)
                 space.get_space()
                 try:
                     if choice == 'up':
@@ -427,113 +425,40 @@ def main():
                         print('PING :')
                         local.get_data(network.get_ping())
                         space.get_space()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'stat':
                         stat.stat()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'histocom':
                         stat.histo_com()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'graphmess':
                         stat.graph_mess()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'statspam':
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         stat.stat_spam()
                     elif choice == 'statco':
-                        try:
-                            com.param[0]
-                        except IndexError:
-                            com.param.append('999')
-                        stat.role = com.param[0]
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         stat.stat_co()
                     elif choice == 'statchan':
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         stat.stat_chan()
                     elif choice == 'add':
-                        role_cmd.role = com.param[0]  # Nom du role
-                        role_cmd.user = com.param[1]  # utilisateur
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         role_cmd.add()
                     elif choice == 'del':
-                        role_cmd.role = com.param[0]
-                        role_cmd.user = com.param[1]
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         role_cmd.dell()
                     elif choice == 'addto':
-                        role_cmd.role = com.param[0]
-                        role_cmd.user = com.param[1:]  # tous les utilisateur entrée
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         role_cmd.add_to()
                     elif choice == 'shrole':
                         role_cmd.show_role()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'shperm':
-                        role_cmd.role = com.param[0]
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         role_cmd.show_perm()
                     elif choice == 'shutirole':
-                        role_cmd.role = com.param[0]
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                         role_cmd.show_user_role()
                     elif choice == 'dbacces':
                         db_acces()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
                     elif choice == 'help':
                         help_str()
-                        cmd_histo.name = com.name
-                        cmd_histo.param = com.param
-                        cmd_histo.time = com.time
-                        cmd_histo.get_histo()
-                        """
+
                     elif choice == 'check':
                         try:
                             with DataBaseCommand() as connector:
                                 print(connector.db.list_collection_names())
-                                collection = connector.db["messages"]
+                                collection = connector.db["users"]
                                 collection2 = connector.db["channel"]
                                 list_users = collection.find()
                                 list_msg = collection2.find()
@@ -544,7 +469,6 @@ def main():
                                     print('msg:', msg)
                         except Exception as e:
                             print(e)
-                        """
                     elif choice == 'fin':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'fin'
                         print('Merci d\'avoir utilisé le Chabot')
                         flag = True
