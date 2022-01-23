@@ -280,6 +280,7 @@ class UserStatCommand(DataBaseCommand):
                 for i in col:
                     count += 1
                 print('Il y a ', str(count), ' utilisateur(s).')
+                return 'Il y a ' + str(count) + ' utilisateur(s).'
         except Exception as e:
             print(e)
 
@@ -350,6 +351,7 @@ class UserStatCommand(DataBaseCommand):
                 spam_top = list(spammer_dict.items())
                 sorted(spam_top, key=lambda t: t[1])
                 print('Top spam:', spam_top[0][0], 'avec', spam_top[0][1], 'messages !')
+                return 'Top spam: ' + str(spam_top[0][0]) + ' avec ' + str(spam_top[0][1]) + ' messages !'
         except Exception as e:
             print(e)
 
@@ -402,16 +404,19 @@ class UserStatCommand(DataBaseCommand):
                 collection = connector.db["messages"]
                 list_message = collection.find()
                 for msg in list_message:
-                    if msg['channel_id'][1] in top_channel:
-                        top_channel[msg['channel_id'][1]] += 1
-                    else:
-                        top_channel[msg['channel_id'][1]] = 1
+                    if msg['channel_id'] != None:
+                        if msg['channel_id'][1] in top_channel:
+                            top_channel[msg['channel_id'][1]] += 1
+                        else:
+                            top_channel[msg['channel_id'][1]] = 1
                 channel_top = list(top_channel.items())
                 sorted(channel_top, key=lambda t: t[1])
                 for i in range(3):
                     print('Top', i+1, 'pour le channel', channel_top[i][0], 'nombre de message:', channel_top[i][1])
+                return 'Top' + str(1) + 'pour le channel' + str(channel_top[1][0]) + 'nombre de message:' + \
+                       str(channel_top[1][1])
         except Exception as e:
-            print(e)
+            pass
 
 class RoleManagementCommand(DataBaseCommand):
     """
@@ -446,7 +451,7 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = True
+            flag = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
@@ -455,8 +460,7 @@ class RoleManagementCommand(DataBaseCommand):
                                                            ):
                         new_value = {"$push": {"list_role": int(self.__role)}}
                         connector.db["users"].update_one({'pseudo': self.__user}, new_value)
-                    else:
-                        flag = False
+                        flag = True
             if not flag:
                 print("Rôle ou l'utilisateur entré n'est pas reconnu")
         except Exception as e:
@@ -471,7 +475,7 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = True
+            flag = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
@@ -480,8 +484,7 @@ class RoleManagementCommand(DataBaseCommand):
                         users['list_role'].remove(int(self.__role))
                         del_value = {"$set": {"list_role": users['list_role']}}
                         connector.db["users"].update_one({'pseudo': self.__user}, del_value)
-                    else:
-                        flag = False
+                        flag = True
             if not flag:
                 print("Rôle ou l'utilisateur entré n'est pas reconnu")
         except Exception as e:
@@ -496,20 +499,18 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = True
-            flag2 = True
+            flag = False
+            flag2 = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
                 for users in list_users:
                     if users['pseudo'] in self.__group:
+                        flag2 = True
                         if self.__role or int(self.__role) not in users['list_role']:
                             new_value = {"$push": {"list_role": int(self.__role)}}
                             connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
-                        else:
-                            flag = False
-                    else:
-                        flag2 = False
+                            flag = True
             if not flag:
                 print('Role entrée non reconnue')
             if not flag2:
@@ -581,8 +582,10 @@ class RoleManagementCommand(DataBaseCommand):
                         user_list.append(user['pseudo'])
                     else:
                         flag = False
-                print('utilisateur ayant le role', self.__role, ":", end=' ')
-                print(', '.join(user_list))
+                if flag:
+                    print('utilisateur ayant le role', self.__role, ":", end=' ')
+                    print(', '.join(user_list))
+                    return 'utilisateur ayant le role ' + self.__role + ":" + ', '.join(user_list)
             if not flag:
                 print('Rôle non reconnu.')
         except Exception as e:
@@ -625,7 +628,7 @@ class Result:
         return print('')
 
     @staticmethod
-    def display_result():
+    def display_result(data2=None, screen=0):
         """
         This function is used to display the result of the commands.
 
@@ -633,51 +636,37 @@ class Result:
         POST : It displays the result
         RAISES : -
         """
-        space = Result()
-        print('Bienvenu dans le Chatbot')
-        space.get_space()
-        print('Vous pouvez tapez des mots-clés pour avoir accès à vos données réseaux')
-        print('Pour mettre fin à la discussion tapez : fin')
-
-        flag = False  # On définit un flag pour aider à boucler
-
-        while not flag:
-            data = str(input('Choissisez un mot-clé :')).lower()
+        if screen == 1:
             com = Command()
-            space.get_space()
-            com.get_name(data)
+            com.get_name(data2.lower())
             choice = com.name
             local = LocalMachineCommand()
             network = NetworkStatCommand()
-            role_cmd = RoleManagementCommand(data)
-            stat = UserStatCommand(data)
-            space.get_space()
+            role_cmd = RoleManagementCommand(data2)
+            stat = UserStatCommand(data2)
             try:
                 if choice == 'network':
                     print('LOCAL ADDRESS :')
                     print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_local()), '/', local.get_data(
                         network.get_masque('local')))
                     print('IPV6 ADDRESS :', local.get_data(network.get_ipv6_local()))
-                    space.get_space()
                     print('PUBLIC ADDRESS :')
                     print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_public()), '/', local.get_data(
                         network.get_masque('public')))
-                    space.get_space()
                     print('PING :')
                     local.get_data(network.get_ping())
-                    space.get_space()
                 elif choice == 'statusers':
-                    stat.stat()
+                    return stat.stat()
                 elif choice == 'histocommand':
                     stat.histo_com()
                 elif choice == 'graphmessages':
                     stat.graph_mess()
                 elif choice == 'statspam':
-                    stat.stat_spam()
+                    return stat.stat_spam()
                 elif choice == 'statconnected':
                     stat.stat_co()
                 elif choice == 'statchannel':
-                    stat.stat_chan()
+                    return stat.stat_chan()
                 elif choice == 'add':
                     role_cmd.add()
                 elif choice == 'del':
@@ -689,35 +678,102 @@ class Result:
                 elif choice == 'showperm':
                     role_cmd.show_perm()
                 elif choice == 'showutirole':
-                    role_cmd.show_user_role()
+                    return role_cmd.show_user_role()
                 elif choice == 'dbacces':
                     db_acces()
                 elif choice == 'help':
                     help_str()
-
-                #à supprimer
-                elif choice == 'check':
-                    try:
-                        with DataBaseCommand() as connector:
-                            print(connector.db.list_collection_names())
-                            collection = connector.db["roles"]
-                            collection2 = connector.db["channel"]
-                            list_users = collection.find()
-                            list_msg = collection2.find()
-                            for users in list_users:
-                                print("user:", users)
-                            print()
-                            for msg in list_msg:
-                                print('msg:', msg)
-                    except Exception as e:
-                        print(e)
-                elif choice == 'end':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'end'
-                    print('Merci d\'avoir utilisé le Chabot')
-                    flag = True
                 else:
-                    print('Entrée Help pour avoir une liste des commandes.')
+                    return 'Commande entrée inconnue'
             except IndexError:
                 print('Veuillez entrée les arguments nécessaire')
+
+        else:
+            space = Result()
+            print('Bienvenu dans le Chatbot')
+            space.get_space()
+            print('Vous pouvez tapez des mots-clés pour avoir accès à vos données réseaux')
+            print('Pour mettre fin à la discussion tapez : fin')
+
+            flag = False  # On définit un flag pour aider à boucler
+
+            while not flag:
+                data = str(input('Choissisez un mot-clé :')).lower()
+                com = Command()
+                space.get_space()
+                com.get_name(data)
+                choice = com.name
+                local = LocalMachineCommand()
+                network = NetworkStatCommand()
+                role_cmd = RoleManagementCommand(data)
+                stat = UserStatCommand(data)
+                space.get_space()
+                try:
+                    if choice == 'network':
+                        print('LOCAL ADDRESS :')
+                        print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_local()), '/', local.get_data(
+                            network.get_masque('local')))
+                        print('IPV6 ADDRESS :', local.get_data(network.get_ipv6_local()))
+                        space.get_space()
+                        print('PUBLIC ADDRESS :')
+                        print('IPV4 ADDRESS :', local.get_data(network.get_ipv4_public()), '/', local.get_data(
+                            network.get_masque('public')))
+                        space.get_space()
+                        print('PING :')
+                        local.get_data(network.get_ping())
+                        space.get_space()
+                    elif choice == 'statusers':
+                        stat.stat()
+                    elif choice == 'histocommand':
+                        stat.histo_com()
+                    elif choice == 'graphmessages':
+                        stat.graph_mess()
+                    elif choice == 'statspam':
+                        stat.stat_spam()
+                    elif choice == 'statconnected':
+                        stat.stat_co()
+                    elif choice == 'statchannel':
+                        stat.stat_chan()
+                    elif choice == 'add':
+                        role_cmd.add()
+                    elif choice == 'del':
+                        role_cmd.dell()
+                    elif choice == 'addto':
+                        role_cmd.add_to()
+                    elif choice == 'showrole':
+                        role_cmd.show_role()
+                    elif choice == 'showperm':
+                        role_cmd.show_perm()
+                    elif choice == 'showutirole':
+                        role_cmd.show_user_role()
+                    elif choice == 'dbacces':
+                        db_acces()
+                    elif choice == 'help':
+                        help_str()
+
+                    #à supprimer
+                    elif choice == 'check':
+                        try:
+                            with DataBaseCommand() as connector:
+                                print(connector.db.list_collection_names())
+                                collection = connector.db["messages"]
+                                collection2 = connector.db["users"]
+                                list_users = collection.find()
+                                list_msg = collection2.find()
+                                for users in list_users:
+                                    print("user:", users)
+                                print()
+                                for msg in list_msg:
+                                    print('msg:', msg)
+                        except Exception as e:
+                            print(e)
+                    elif choice == 'end':  # On passe le flag à true ça finit la boucle si l'utilisateur tape 'end'
+                        print('Merci d\'avoir utilisé le Chabot')
+                        flag = True
+                    else:
+                        print('Entrée Help pour avoir une liste des commandes.')
+                except IndexError:
+                    print('Veuillez entrée les arguments nécessaire')
 
 
 
