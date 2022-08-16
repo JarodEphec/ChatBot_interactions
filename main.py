@@ -230,13 +230,12 @@ class DataBaseCommand(Command):
         """
         Command.__init__(self)
         certificat_path = config.ROOT_DIR + "\\2TM1-G2.pem"
-        uri = "mongodb+srv://cluster0.5i6qo.gcp.mongodb.net/" \
-              "ephecom?authSource=%24external&authMechanism=MONGODB-X509"
+        uri = "mongodb+srv://projet.s2dzjv7.mongodb.net/ephec?authSource=%24external&authMechanism=MONGODB-X509"
         client = MongoClient(uri,
                              tls=True,
                              tlsCertificateKeyFile=certificat_path)
         self.test_connect = client
-        self.db = client['ephecom']
+        self.db = client['ephec']
 
     def __enter__(self):
         return self
@@ -451,20 +450,19 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
                 for users in list_users:
-                    if self.__user == users['pseudo'] and (self.__role or int(self.__role) not in users['list_role']
+                    if self.__user == users['pseudo'] and (self.__role and int(self.__role) not in users['list_role']
                                                            ):
                         new_value = {"$push": {"list_role": int(self.__role)}}
                         connector.db["users"].update_one({'pseudo': self.__user}, new_value)
-                        flag = True
-            if not flag:
-                print("Rôle ou l'utilisateur entré n'est pas reconnu")
-        except Exception as e:
-            print(e)
+                    else:
+                        raise ValueError(1)
+        except ValueError as error:
+            if error.args[0] == 1:
+                print('User or role incorrect (or already possessed by user)')
 
     def dell(self):
         """
@@ -475,7 +473,6 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
@@ -484,11 +481,11 @@ class RoleManagementCommand(DataBaseCommand):
                         users['list_role'].remove(int(self.__role))
                         del_value = {"$set": {"list_role": users['list_role']}}
                         connector.db["users"].update_one({'pseudo': self.__user}, del_value)
-                        flag = True
-            if not flag:
-                print("Rôle ou l'utilisateur entré n'est pas reconnu")
-        except Exception as e:
-            print(e)
+                    else:
+                        raise ValueError(1)
+        except ValueError as error:
+            if error.args[0] == 1:
+                print('User or role not found')
 
     def add_to(self):
         """
@@ -499,24 +496,19 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = False
-            flag2 = False
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
                 for users in list_users:
                     if users['pseudo'] in self.__group:
-                        flag2 = True
                         if self.__role or int(self.__role) not in users['list_role']:
                             new_value = {"$push": {"list_role": int(self.__role)}}
                             connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
-                            flag = True
-            if not flag:
-                print('Role entrée non reconnue')
-            if not flag2:
-                print('utilisateur entré incorrect')
-        except Exception as e:
-            print(e)
+                        else:
+                            raise ValueError(1)
+        except ValueError as error:
+            if error.args[0] == 1:
+                print('role already added to user')
 
     @staticmethod
     def show_role():
@@ -544,7 +536,6 @@ class RoleManagementCommand(DataBaseCommand):
         POST : It displays the permissions
         RAISES : -
         """
-        flag = True
         try:
             with DataBaseCommand() as connector:
                 collection = connector.db["roles"]
@@ -557,11 +548,10 @@ class RoleManagementCommand(DataBaseCommand):
                         for perm in list_perm:
                             print("Permission:", perm['name'])
                     else:
-                        flag = False
-            if not flag:
-                print('Rôle non reconnu.')
-        except Exception as e:
-            print(e)
+                        raise ValueError(1)
+        except ValueError as error:
+            if error.args[0] == 1:
+                print('Role not found')
 
     def show_user_role(self):
         """
@@ -572,26 +562,29 @@ class RoleManagementCommand(DataBaseCommand):
         RAISES : -
         """
         try:
-            flag = True
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 user_list = []
                 list_user = collection.find()
+                if int(self.__role) == 0:
+                    raise ValueError(1)
                 for user in list_user:
                     if int(self.__role) in user['list_role']:
                         user_list.append(user['pseudo'])
-                    else:
-                        flag = False
-                if flag:
+                if user_list != []:
                     print('utilisateur ayant le role', self.__role, ":", end=' ')
                     print(', '.join(user_list))
                     return 'utilisateur ayant le role ' + self.__role + ":" + ', '.join(user_list)
-            if not flag:
-                print('Rôle non reconnu.')
-        except Exception as e:
-            print(e)
+                raise ValueError(2, "No one has role number ", self.__role, " or it doesn't existe")
+        except ValueError as error:
+            if error.args[0] == 1:
+                print("Veulliez entrée un role")
+            if error.args[0] == 2:
+                print(error.args[1] + error.args[2] + error.args[3])
+
 
 def db_acces():
+
     """
     This function allows to check the access to the database.
 
@@ -756,7 +749,7 @@ class Result:
                         try:
                             with DataBaseCommand() as connector:
                                 print(connector.db.list_collection_names())
-                                collection = connector.db["messages"]
+                                collection = connector.db["roles"]
                                 collection2 = connector.db["users"]
                                 list_users = collection.find()
                                 list_msg = collection2.find()
