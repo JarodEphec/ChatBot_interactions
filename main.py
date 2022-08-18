@@ -556,7 +556,8 @@ class RoleManagementCommand(DataBaseCommand):
                                 err = 2
                                 new_value = {"$push": {"list_role": self.__role}}
                                 connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
-                                print('Le rôle a correctement été ajouté aux utilisateurs !')
+                                print('Le rôle a correctement été ajouté !')
+                        return 'Le rôle a correctement été ajouté !'
                 if err == 0:
                     raise ValueError(2)
                 if err == 1:
@@ -586,6 +587,7 @@ class RoleManagementCommand(DataBaseCommand):
                 list_role = collection.find()
                 for role in list_role:
                     print("Role",role['id'],":", role['name'])
+                return "Role"+ str(role['id'])+ ":"+ str(role['name'])
         except Exception as e:
             print(e)
 
