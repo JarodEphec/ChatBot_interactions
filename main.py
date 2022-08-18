@@ -13,13 +13,13 @@ mots = ['Commande Réseaux:', 'network', 'Commande Statistique:', 'statUsers', "
         "ShowUtiRole", 'dbAcces', 'help']
 desc = ['', 'affiche le statut du réseau', '', 'affiche le nombre d’utilisateurs total',
         'affiche l’historique de commande de l’utilisateur',
-        "Nombre d'utilisateur connecter total ou par role (-role pour tout les role sauf ce role)",
-        "affiche utilisateur qui spam le plus", 'Graph des message envoyer', 'Top des channel les plus actif', '',
-        'ajouter un rôle à un utilisateur (Ex:add role utilisateur)', ' retirer un rôle à un utilisateur '
-                                                                      '(Ex:del role utilisateur)',
-        'ajouter un rôle à tous les noms utilisateurs (Ex:addTo role utilisateur1 utilisateur2)',
-        'affiche une liste des différents rôles', 'affiche les permissions d\'un role (Ex:shPerm role)',
-        'affiche une liste des utilisateurs par rôle (Ex: ShUtiRole role)', 'Indique si la connexion a la db a reussi',
+        "nombre d'utilisateurs connectés au total ou par role (-role pour tous les roles sauf ce role)",
+        "affiche utilisateur qui spam le plus", 'Graph des messages envoyés', 'top des channel les plus actif', '',
+        'ajoute un rôle à un utilisateur (Ex: add role utilisateur)', ' retire un rôle à un utilisateur '
+                                                                      '(Ex: del role utilisateur)',
+        'ajoute un rôle à tous les noms utilisateurs (Ex: addTo role utilisateur1 utilisateur2)',
+        'affiche une liste des différents rôles', 'affiche les permissions d\'un role (Ex: showPerm role)',
+        'affiche une liste des utilisateurs par rôle (Ex: ShowUtiRole role)', 'indique si la connexion a la base de donnée est fonctionnelle',
         'affiche toutes les commandes']
 histo_cmd = []
 
@@ -278,8 +278,7 @@ class UserStatCommand(DataBaseCommand):
                 col = collection.find()
                 for i in col:
                     count += 1
-                print('Il y a ', str(count), ' utilisateur(s).')
-                return 'Il y a ' + str(count) + ' utilisateur(s).'
+                print('Il y a', str(count), 'utilisateur(s).')
         except Exception as e:
             print(e)
 
@@ -318,8 +317,8 @@ class UserStatCommand(DataBaseCommand):
         y = [week[0], week[1], week[2], week[3], week[4], week[5], week[6]]  # replace with nb message when ready
         plt.plot(x, y, color='purple')
         plt.xlabel("jours de la semaine")
-        plt.ylabel("Nombre de message")
-        plt.title("Nombre de message envoyer par jour pour 1 semaine")
+        plt.ylabel("Nombre de messages")
+        plt.title("Nombre de messages envoyés par jour pour 1 semaine")
         plt.show()
 
     @staticmethod
@@ -377,9 +376,9 @@ class UserStatCommand(DataBaseCommand):
                 if flag:
                     for users in list_users:
                         if self.__role[0] == "-":
-                            if int(self.__role[1:]) not in users["list_role"]:
+                            if self.__role[1:] not in users["list_role"]:
                                 print(users['pseudo'])
-                        elif int(self.__role) in users["list_role"]:
+                        elif self.__role in users["list_role"]:
                             print(users['pseudo'])
                         else:
                             print(users['pseudo'])
@@ -453,13 +452,16 @@ class RoleManagementCommand(DataBaseCommand):
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
+                collection = connector.db["roles"]
+                list_roles = collection.find()
                 for users in list_users:
-                    if self.__user == users['pseudo'] and (self.__role and int(self.__role) not in users['list_role']
-                                                           ):
-                        new_value = {"$push": {"list_role": int(self.__role)}}
-                        connector.db["users"].update_one({'pseudo': self.__user}, new_value)
-                    else:
-                        raise ValueError(1)
+                    if (self.__user == users['pseudo']):
+                        for roles in list_roles:
+                            if (self.__role not in users['list_role']) and (self.__role in roles['name']):
+                                new_value = {"$push": {"list_role": self.__role}}
+                                connector.db["users"].update_one({'pseudo': self.__user}, new_value)
+                                print('Le rôle a correctement été ajouté !')
+                    # manque le raise
         except ValueError as error:
             if error.args[0] == 1:
                 print('User or role incorrect (or already possessed by user)')
@@ -476,13 +478,17 @@ class RoleManagementCommand(DataBaseCommand):
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
+                collection = connector.db["roles"]
+                list_roles = collection.find()
                 for users in list_users:
-                    if self.__user == users['pseudo'] and (int(self.__role) or self.__role in users['list_role']):
-                        users['list_role'].remove(int(self.__role))
-                        del_value = {"$set": {"list_role": users['list_role']}}
-                        connector.db["users"].update_one({'pseudo': self.__user}, del_value)
-                    else:
-                        raise ValueError(1)
+                    if (self.__user == users['pseudo']):
+                        for roles in list_roles:
+                            if (self.__role in users['list_role']) and (self.__role in roles['name']):
+                                users['list_role'].remove(self.__role)
+                                del_value = {"$set": {"list_role": users['list_role']}}
+                                connector.db["users"].update_one({'pseudo': self.__user}, del_value)
+                                print('Le rôle a correctement été supprimé !')
+                    # manque le raise
         except ValueError as error:
             if error.args[0] == 1:
                 print('User or role not found')
@@ -499,13 +505,16 @@ class RoleManagementCommand(DataBaseCommand):
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 list_users = collection.find()
-                for users in list_users:
-                    if users['pseudo'] in self.__group:
-                        if self.__role or int(self.__role) not in users['list_role']:
-                            new_value = {"$push": {"list_role": int(self.__role)}}
-                            connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
-                        else:
-                            raise ValueError(1)
+                collection = connector.db["roles"]
+                list_roles = collection.find()
+                for roles in list_roles:
+                    if (self.__role in roles['name']):
+                        for users in list_users:
+                            if (self.__role not in users['list_role']) and (users['pseudo'] in self.__group):
+                                new_value = {"$push": {"list_role": self.__role}}
+                                connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
+                                print('Le rôle a correctement été ajouté aux utilisateurs !')
+                   #manque le raise
         except ValueError as error:
             if error.args[0] == 1:
                 print('role already added to user')
@@ -524,7 +533,7 @@ class RoleManagementCommand(DataBaseCommand):
                 collection = connector.db["roles"]
                 list_role = collection.find()
                 for role in list_role:
-                    print("Roles:", role['name'])
+                    print("Role",role['id'],":", role['name'])
         except Exception as e:
             print(e)
 
@@ -544,11 +553,11 @@ class RoleManagementCommand(DataBaseCommand):
                 list_perm = collection2.find()
                 for role in list_role:
                     if role['name'] == self.__role:
+                        print("Role :",self.__role)
                         print("Permission:", role['perm_list'])
                         for perm in list_perm:
                             print("Permission:", perm['name'])
-                    else:
-                        raise ValueError(1)
+                            #manque le raise
         except ValueError as error:
             if error.args[0] == 1:
                 print('Role not found')
@@ -566,16 +575,16 @@ class RoleManagementCommand(DataBaseCommand):
                 collection = connector.db["users"]
                 user_list = []
                 list_user = collection.find()
-                if int(self.__role) == 0:
+                if (self.__role) == '':
                     raise ValueError(1)
                 for user in list_user:
-                    if int(self.__role) in user['list_role']:
+                    if self.__role in user['list_role']:
                         user_list.append(user['pseudo'])
                 if user_list != []:
                     print('utilisateur ayant le role', self.__role, ":", end=' ')
                     print(', '.join(user_list))
                     return 'utilisateur ayant le role ' + self.__role + ":" + ', '.join(user_list)
-                raise ValueError(2, "No one has role number ", self.__role, " or it doesn't existe")
+                raise ValueError(2, "No one has role number ", self.__role, " or it doesn't exist")
         except ValueError as error:
             if error.args[0] == 1:
                 print("Veulliez entrée un role")
@@ -595,9 +604,9 @@ def db_acces():
     try:
         with DataBaseCommand() as connector:
             connector.test_connect.admin.command('ismaster')
-            print('Base de données joignables')
+            print('La base de données est joignable')
     except ConnectionFailure:
-        print("Base de données injoignables")
+        print("La base de données est injoignable")
 
 def help_str():
     print('Liste des Commandes:')
