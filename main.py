@@ -1,6 +1,7 @@
 import socket
 import subprocess
 import matplotlib.pyplot as plt
+import logging
 from datetime import datetime
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
@@ -23,6 +24,7 @@ desc = ['', 'affiche le statut du réseau', '', 'affiche le nombre d’utilisate
         'affiche toutes les commandes']
 histo_cmd = []
 
+logging.basicConfig(filename='Function.log', encoding='utf-8', level=logging.DEBUG, format='%(levelname)s:%(message)s (%(asctime)s)', datefmt='%m/%d/%Y %I:%M:%S %p')
 
 
 class Command:
@@ -134,6 +136,7 @@ class NetworkStatCommand(LocalMachineCommand):
     """
         This class handles all network-related commands.
     """
+
     def __init__(self):
         """
         This function allows you to split the command line written by the user into different parameters.
@@ -149,7 +152,7 @@ class NetworkStatCommand(LocalMachineCommand):
         This function will retrieve the masks linked to the IP addresses via an ipconfig.
 
         PRE : param is str
-        POST : netmask is str
+        POST : netmask is str - Retourne le masque de sous-réseau ipv4
         RAISES : -
         """
         ip = ''
@@ -176,7 +179,7 @@ class NetworkStatCommand(LocalMachineCommand):
         This function retrieves the local ipv4 address.
 
         PRE : -
-        POST : ipv4 is str
+        POST : ipv4 is str - Retourne l'addresse local ipv4
         RAISES : -
         """
         ip4 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -189,7 +192,7 @@ class NetworkStatCommand(LocalMachineCommand):
         This function retrieves the local ipv6 address.
 
         PRE : -
-        POST : ipv6 is str
+        POST : ipv6 is str - Retourne l'addresse local ipv6
         RAISES : -
         """
         try:
@@ -206,7 +209,7 @@ class NetworkStatCommand(LocalMachineCommand):
         This function retrieves the public ipv4 address.
 
         PRE : -
-        POST : ipv4 is str
+        POST : ipv4 is str - Retourne l'addresse ipv4
         RAISES : -
         """
         ipv4 = str(socket.gethostbyname(socket.gethostname()))
@@ -254,8 +257,8 @@ class UserStatCommand(DataBaseCommand):
         """
         This function allows you to split the command line written by the user into different parameters.
 
-        PRE : Sentence need to be str
-        POST : Role allocation and its str
+        PRE : Sentence need to be a string - It is the string typed by the users in the command line
+        POST : initialize self.__role
         RAISES : -
         """
         DataBaseCommand.__init__(self)
@@ -268,7 +271,7 @@ class UserStatCommand(DataBaseCommand):
         This function counts the total number of users.
 
         PRE : -
-        POST : It displays number of users
+        POST : It returns the number of users
         RAISES : -
         """
         count = 0
@@ -288,7 +291,7 @@ class UserStatCommand(DataBaseCommand):
         This function displays the commands entered by the user.
 
         PRE : -
-        POST : It displays the commands with the name, parameters and time
+        POST : It returns the commands with the name, parameters and time
         RAISES : -
         """
         for cmd in histo_cmd:
@@ -300,7 +303,7 @@ class UserStatCommand(DataBaseCommand):
         This function displays the number of messages sent during the week.
 
         PRE : -
-        POST : It displays number of messages
+        POST : It returns number of messages
         RAISES : -
         """
         week = [0, 0, 0, 0, 0, 0, 0]
@@ -310,7 +313,7 @@ class UserStatCommand(DataBaseCommand):
                 list_message = collection.find()
                 for message in list_message:
                     var_time = message['timestamp']
-                    week[datetime.strptime(var_time, '%Y-%m-%d %H:%M:%S.%f').weekday()] += 1
+                    week[datetime.strptime(var_time, '%Y-%m-%d %H:%M:%S').weekday()] += 1
         except Exception as e:
             print(e)
         x = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'samedi', 'dimanche']
@@ -327,7 +330,7 @@ class UserStatCommand(DataBaseCommand):
         This function displays the user who spams the most.
 
         PRE : -
-        POST : It displays its name
+        POST : It returns its name
         RAISES : -
         """
         spammer_dict = {}
@@ -342,13 +345,13 @@ class UserStatCommand(DataBaseCommand):
                     spammer_dict[users['pseudo']] = 1
                 for message in list_message:
                     var_time = message['timestamp']
-                    diff = round((datetime.now() - datetime.strptime(var_time, '%Y-%m-%d %H:%M:%S.%f')
+                    diff = round((datetime.now() - datetime.strptime(var_time, '%Y-%m-%d %H:%M:%S')
                                   ).total_seconds()/3600)
-                    if diff < 20:
+                    if diff/10000 < 20:
                         spammer_dict[message['sender']] += 1
                 spam_top = list(spammer_dict.items())
-                sorted(spam_top, key=lambda t: t[1])
-                print('Top spam:', spam_top[0][0], 'avec', spam_top[0][1], 'messages !')
+                spam_top = sorted(spam_top, key=lambda t: t[0][1])
+                print('Top spam:', spam_top[0][0], 'avec', int(spam_top[0][1])-1, 'messages !')
                 return 'Top spam: ' + str(spam_top[0][0]) + ' avec ' + str(spam_top[0][1]) + ' messages !'
         except Exception as e:
             print(e)
@@ -358,7 +361,7 @@ class UserStatCommand(DataBaseCommand):
         This function displays the names of the logged-in users or by their role.
 
         PRE : -
-        POST : It displays names of the logged-in users or by their role.
+        POST : It returns the names of the logged-in users or by their role.
         RAISES : -
         """
         try:
@@ -367,13 +370,13 @@ class UserStatCommand(DataBaseCommand):
                 list_users = collection.find()
                 collection = connector.db["roles"]
                 list_role = collection.find()
-                flag = True
+                err = 0
                 for role in list_role:
-                    if self.__role[1:] not in role['name']:
-                        flag = False
-                    if self.__role not in role['name']:
-                        flag = False
-                if flag:
+                    if self.__role[1:] == role['name']:
+                        err = 1
+                    if self.__role == '0':
+                        err = 1
+                if err == 1:
                     for users in list_users:
                         if self.__role[0] == "-":
                             if self.__role[1:] not in users["list_role"]:
@@ -383,9 +386,11 @@ class UserStatCommand(DataBaseCommand):
                         else:
                             print(users['pseudo'])
                 else:
-                    print('Rôle inconnu')
-        except Exception as e:
-            print(e)
+                    raise ValueError(1)
+        except ValueError as error:
+            if error.args[0] == 1:
+                print('Role not found')
+                logging.info("stat co couldn't finish cause : role=" + self.__role)
 
     @staticmethod
     def stat_chan():
@@ -393,7 +398,7 @@ class UserStatCommand(DataBaseCommand):
         This function displays the top 3 most used channels.
 
         PRE : -
-        POST : It displays the top 3 most used channels.
+        POST : It returns the top 3 most used channels.
         RAISES : -
         """
         top_channel = {}
@@ -402,13 +407,13 @@ class UserStatCommand(DataBaseCommand):
                 collection = connector.db["messages"]
                 list_message = collection.find()
                 for msg in list_message:
-                    if msg['channel_id'] != None:
-                        if msg['channel_id'][1] in top_channel:
-                            top_channel[msg['channel_id'][1]] += 1
+                    if msg['channel_id'] is not None:
+                        if msg['channel_id'] in top_channel:
+                            top_channel[msg['channel_id']] += 1
                         else:
-                            top_channel[msg['channel_id'][1]] = 1
+                            top_channel[msg['channel_id']] = 1
                 channel_top = list(top_channel.items())
-                sorted(channel_top, key=lambda t: t[1])
+                channel_top = sorted(channel_top, key=lambda t: t[1])
                 for i in range(3):
                     print('Top', i+1, 'pour le channel', channel_top[i][0], 'nombre de message:', channel_top[i][1])
                 return 'Top' + str(1) + 'pour le channel' + str(channel_top[1][0]) + 'nombre de message:' + \
@@ -424,8 +429,8 @@ class RoleManagementCommand(DataBaseCommand):
         """
         This function allows you to split the command line written by the user into different parameters.
 
-        PRE : Sentence need to be str
-        POST : Role, user and group assignment
+        PRE : Sentence need to be a string - It is the string typed by the users in the command line
+        POST : initialize Role, user and group
         RAISES : -
         """
         DataBaseCommand.__init__(self)
@@ -444,9 +449,10 @@ class RoleManagementCommand(DataBaseCommand):
         """
         This function adds a role to a user in the database.
 
-        PRE : -
-        POST : The dabase is modified
-        RAISES : -
+        PRE : Role and User need to be a string
+        POST : Give a role to a user
+        RAISES : ValueError(1): No parameter - ValueError(2):  User not found or missing - ValueError(3): Role not found
+         or already assigned
         """
         try:
             with DataBaseCommand() as connector:
@@ -454,25 +460,41 @@ class RoleManagementCommand(DataBaseCommand):
                 list_users = collection.find()
                 collection = connector.db["roles"]
                 list_roles = collection.find()
+                err = 0
+                if self.__role == '0':
+                    raise ValueError(1)
                 for users in list_users:
-                    if (self.__user == users['pseudo']):
+                    if self.__user == users['pseudo']:
+                        err = 1
                         for roles in list_roles:
-                            if (self.__role not in users['list_role']) and (self.__role in roles['name']):
+                            if (self.__role not in users['list_role']) and (self.__role == roles['name']):
+                                err = 2
                                 new_value = {"$push": {"list_role": self.__role}}
                                 connector.db["users"].update_one({'pseudo': self.__user}, new_value)
                                 print('Le rôle a correctement été ajouté !')
-                    # manque le raise
+                                return 'Le rôle a correctement été ajouté !'
+                if err == 0:
+                    raise ValueError(2)
+                if err == 1:
+                    raise ValueError(3)
         except ValueError as error:
             if error.args[0] == 1:
-                print('User or role incorrect (or already possessed by user)')
+                print('No Role has been entered.')
+                logging.info("add couldn't finish cause : role=" + self.__role)
+            if error.args[0] == 2:
+                print('User Not found or missing')
+                logging.info("add couldn't finish cause : role=" + self.__user)
+            if error.args[0] == 3:
+                print('Role not found or already assigned')
+                logging.info("add couldn't finish cause : role=" + self.__role)
 
     def dell(self):
         """
         This function delete a role to a user in the database.
 
-        PRE : -
-        POST : The dabase is modified
-        RAISES : -
+        PRE : Role and User need to be a string
+        POST : delete a role to a user
+        RAISES : ValueError(1): No parameter - ValueError(2):  User not found or missing - ValueError(3): Role not found
         """
         try:
             with DataBaseCommand() as connector:
@@ -480,26 +502,42 @@ class RoleManagementCommand(DataBaseCommand):
                 list_users = collection.find()
                 collection = connector.db["roles"]
                 list_roles = collection.find()
+                err = 0
+                if self.__role == '0':
+                    raise ValueError(1)
                 for users in list_users:
-                    if (self.__user == users['pseudo']):
+                    if self.__user == users['pseudo']:
+                        err = 1
                         for roles in list_roles:
-                            if (self.__role in users['list_role']) and (self.__role in roles['name']):
+                            if (self.__role in users['list_role']) and (self.__role == roles['name']):
+                                err = 2
                                 users['list_role'].remove(self.__role)
                                 del_value = {"$set": {"list_role": users['list_role']}}
                                 connector.db["users"].update_one({'pseudo': self.__user}, del_value)
                                 print('Le rôle a correctement été supprimé !')
-                    # manque le raise
+                                return 'Le rôle a correctement été supprimé !'
+                if err == 0:
+                    raise ValueError(2)
+                if err == 1:
+                    raise ValueError(3)
         except ValueError as error:
             if error.args[0] == 1:
-                print('User or role not found')
+                print('No Role has been entered.')
+                logging.info("del couldn't finish cause : role=" + self.__role)
+            if error.args[0] == 2:
+                print('User Not found or missing')
+                logging.info("del couldn't finish cause : role=" + self.__user)
+            if error.args[0] == 3:
+                print('Role not found')
+                logging.info("del couldn't finish cause : role=" + self.__role)
 
     def add_to(self):
         """
         This function adds a role to multiple users in the database.
 
-        PRE : -
-        POST : The dabase is modified
-        RAISES : -
+        PRE : Role need to be a string and group need to be a list(string)
+        POST : Give a role to multiple users
+        RAISES : ValueError(1): No parameter - ValueError(2):  role not found - ValueError(3): Users incorrect
         """
         try:
             with DataBaseCommand() as connector:
@@ -507,17 +545,31 @@ class RoleManagementCommand(DataBaseCommand):
                 list_users = collection.find()
                 collection = connector.db["roles"]
                 list_roles = collection.find()
+                if self.__role == '0':
+                    raise ValueError(1)
+                err = 0
                 for roles in list_roles:
-                    if (self.__role in roles['name']):
+                    if self.__role in roles['name']:
+                        err = 1
                         for users in list_users:
                             if (self.__role not in users['list_role']) and (users['pseudo'] in self.__group):
+                                err = 2
                                 new_value = {"$push": {"list_role": self.__role}}
                                 connector.db["users"].update_one({'pseudo': users['pseudo']}, new_value)
                                 print('Le rôle a correctement été ajouté aux utilisateurs !')
-                   #manque le raise
+                if err == 0:
+                    raise ValueError(2)
+                if err == 1:
+                    raise ValueError(3)
         except ValueError as error:
             if error.args[0] == 1:
-                print('role already added to user')
+                print('No Role has been entered.')
+                logging.info("add to couldn't finish cause : role=" + self.__role)
+            if error.args[0] == 2:
+                print('Role not found')
+                logging.info("add to couldn't finish cause : role=" + self.__role)
+            if error.args[0] == 3:
+                print('Users entered incorrect')
 
     @staticmethod
     def show_role():
@@ -525,7 +577,7 @@ class RoleManagementCommand(DataBaseCommand):
         This function displays the different roles that exist.
 
         PRE : -
-        POST : It displays the roles
+        POST : It returns the roles
         RAISES : -
         """
         try:
@@ -541,9 +593,9 @@ class RoleManagementCommand(DataBaseCommand):
         """
         This function displays the different permissions in relation to a role.
 
-        PRE : -
-        POST : It displays the permissions
-        RAISES : -
+        PRE : Role need to be a string
+        POST : It returns the permissions of a role
+        RAISES : ValueError(1): No role entered - ValueError(2): Role not found
         """
         try:
             with DataBaseCommand() as connector:
@@ -551,31 +603,41 @@ class RoleManagementCommand(DataBaseCommand):
                 collection2 = connector.db["permissions"]
                 list_role = collection.find()
                 list_perm = collection2.find()
+                if self.__role == '0':
+                    raise ValueError(1)
+                err = 0
                 for role in list_role:
                     if role['name'] == self.__role:
-                        print("Role :",self.__role)
-                        print("Permission:", role['perm_list'])
+                        err = 1
+                        print("Role:", self.__role)
+                        print("Permission: N°", role['perm_list'][0])
                         for perm in list_perm:
                             print("Permission:", perm['name'])
-                            #manque le raise
+                            return perm['name']
+                if err == 0:
+                    raise ValueError(2)
         except ValueError as error:
             if error.args[0] == 1:
+                print('No Role has been entered.')
+                logging.info("Show perm couldn't finish cause : role="+ self.__role)
+            if error.args[0] == 2:
                 print('Role not found')
+                logging.info("Show perm couldn't finish cause : role=" + self.__role)
 
     def show_user_role(self):
         """
         This function displays the different users in relation to a role.
 
-        PRE : -
-        POST : It displays the users
-        RAISES : -
+        PRE : Role need to be a string
+        POST : It returns the users that have a specific role
+        RAISES : ValueError(1): No role entered - ValueError(2): Role not found or no one possesses it
         """
         try:
             with DataBaseCommand() as connector:
                 collection = connector.db["users"]
                 user_list = []
                 list_user = collection.find()
-                if (self.__role) == '':
+                if self.__role == '0':
                     raise ValueError(1)
                 for user in list_user:
                     if self.__role in user['list_role']:
@@ -587,9 +649,11 @@ class RoleManagementCommand(DataBaseCommand):
                 raise ValueError(2, "No one has role number ", self.__role, " or it doesn't exist")
         except ValueError as error:
             if error.args[0] == 1:
-                print("Veulliez entrée un role")
+                print("No Role has been entered.")
+                logging.debug("Show user role couldn't finish cause : role="+ self.__role)
             if error.args[0] == 2:
                 print(error.args[1] + error.args[2] + error.args[3])
+                logging.debug("Show user role couldn't finish cause : role="+ self.__role)
 
 
 def db_acces():
@@ -598,7 +662,7 @@ def db_acces():
     This function allows to check the access to the database.
 
     PRE : -
-    POST : It displays if you have the access or not
+    POST : It returns if you have the access to the database or not
     RAISES : -
     """
     try:
